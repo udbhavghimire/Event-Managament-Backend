@@ -1,0 +1,21 @@
+from django.urls import path
+from .views import (
+    CheckInView,
+    FeedbackCreateView,
+    MyRegistrationsView,
+    RegistrationCancelView,
+    RegistrationConfirmView,
+    RegistrationCreateView,
+)
+
+app_name = "registrations"
+
+# All mounted at /api/ — patterns carry their full resource prefix.
+urlpatterns = [
+    path("registrations/", RegistrationCreateView.as_view(), name="registration_create"),
+    path("registrations/<int:pk>/confirm/", RegistrationConfirmView.as_view(), name="registration_confirm"),
+    path("registrations/<int:pk>/cancel/", RegistrationCancelView.as_view(), name="registration_cancel"),
+    path("me/registrations/", MyRegistrationsView.as_view(), name="my_registrations"),
+    path("checkins/", CheckInView.as_view(), name="check_in"),
+    path("feedback/", FeedbackCreateView.as_view(), name="feedback_create"),
+]
