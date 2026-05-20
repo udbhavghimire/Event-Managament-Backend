@@ -1,3 +1,5 @@
+import os
+
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
@@ -154,4 +156,76 @@ class AdminSuspendUserView(APIView):
         return Response(
             {"detail": f"{user.email} has been suspended."},
             status=status.HTTP_200_OK,
+        )
+
+
+# ---------------------------------------------------------------------------
+# One-time superuser bootstrap endpoint
+# ---------------------------------------------------------------------------
+
+class CreateSuperAdminView(APIView):
+    """
+    One-time endpoint to create the first superuser/admin account.
+
+    Protected by SETUP_TOKEN env var — disable by deleting that env var on Render.
+    Anyone who knows the token can call this, so delete it immediately after use.
+
+    POST /api/setup/create-admin/
+    Headers: X-Setup-Token: <your SETUP_TOKEN value>
+    Body: { "email": "...", "password": "...", "full_name": "..." }
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request: Request) -> Response:
+        setup_token = os.environ.get("SETUP_TOKEN", "")
+        if not setup_token:
+            return Response(
+                {"detail": "Setup endpoint is disabled. Set SETUP_TOKEN env var to enable it."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        provided_token = request.headers.get("X-Setup-Token", "")
+        if provided_token != setup_token:
+            return Response(
+                {"detail": "Invalid setup token."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        email = request.data.get("email", "").strip().lower()
+        password = request.data.get("password", "")
+        full_name = request.data.get("full_name", "Admin").strip()
+
+        if not email or not password:
+            return Response(
+                {"detail": "email and password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(password) < 8:
+            return Response(
+                {"detail": "Password must be at least 8 characters."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"detail": f"A user with email {email} already exists."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        user = User.objects.create_superuser(
+            email=email,
+            password=password,
+            full_name=full_name,
+            role=User.Role.ADMIN,
+        )
+
+        return Response(
+            {
+                "detail": "Superuser created successfully. Remove SETUP_TOKEN from env vars now.",
+                "user_id": user.pk,
+                "email": user.email,
+                "role": user.role,
+                "is_staff": user.is_staff,
+                "is_superuser": user.is_superuser,
+            },
+            status=status.HTTP_201_CREATED,
         )

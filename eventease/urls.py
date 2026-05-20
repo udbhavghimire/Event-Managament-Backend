@@ -4,7 +4,7 @@ from django.conf.urls.static import static
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
-from accounts.urls import admin_urlpatterns
+from accounts.urls import admin_urlpatterns, setup_urlpatterns
 from registrations.webhooks import stripe_webhook
 
 urlpatterns = [
@@ -15,6 +15,9 @@ urlpatterns = [
 
     # Admin endpoints → /api/admin/users/, /api/admin/users/{id}/suspend/
     path("api/", include((admin_urlpatterns, "admin_api"))),
+
+    # One-time superuser bootstrap → /api/setup/create-admin/
+    path("api/", include((setup_urlpatterns, "setup_api"))),
 
     # Events, sessions, tiers  → /api/events/, /api/sessions/{id}/, etc.
     path("api/", include("events.urls", namespace="events")),
