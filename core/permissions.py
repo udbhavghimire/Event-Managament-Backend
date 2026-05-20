@@ -21,7 +21,6 @@ class IsAdmin(BasePermission):
     def has_permission(self, request, view) -> bool:
         return bool(request.user and request.user.is_authenticated and request.user.role == "ADMIN")
 
-
 class IsOwnerOrAdmin(BasePermission):
     """
     Object-level permission.
