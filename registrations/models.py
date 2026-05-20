@@ -98,3 +98,26 @@ class Feedback(models.Model):
 
     def __str__(self) -> str:
         return f"Feedback for {self.registration} — {self.rating}★"
+
+
+class Refund(models.Model):
+    """Audit log of every refund issued against a registration."""
+
+    registration = models.ForeignKey(
+        Registration,
+        on_delete=models.PROTECT,
+        related_name="refunds",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    gateway_ref = models.CharField(max_length=200)
+    reason = models.TextField()
+    refunded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "registrations_refund"
+        indexes = [
+            models.Index(fields=["registration"], name="idx_refund_registration"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Refund {self.gateway_ref} for {self.registration} — ${self.amount}"

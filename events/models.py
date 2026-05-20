@@ -33,6 +33,11 @@ class Event(models.Model):
         self.status = self.Status.PUBLISHED
         self.save(update_fields=["status"])
 
+    def unpublish(self) -> None:
+        """Revert a published event back to DRAFT."""
+        self.status = self.Status.DRAFT
+        self.save(update_fields=["status"])
+
     def cancel(self) -> None:
         self.status = self.Status.CANCELLED
         self.save(update_fields=["status"])

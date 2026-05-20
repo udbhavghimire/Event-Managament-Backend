@@ -4,7 +4,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.adapters.payment_adapter import StubPaymentGateway
+from core.adapters.payment_adapter import get_payment_gateway
 from core.permissions import IsAttendee, IsOrganizer, IsAdmin
 from core.services.registration_service import RegisterForEventService, SoldOutError
 
@@ -14,6 +14,8 @@ from .serializers import (
     FeedbackSerializer,
     RegistrationCreateSerializer,
     RegistrationSerializer,
+    RefundCreateSerializer,
+    RefundSerializer,
 )
 
 
@@ -54,7 +56,7 @@ class RegistrationCreateView(APIView):
                     ticket_tier=tier,
                     status=Registration.Status.PENDING,
                 )
-                gateway = StubPaymentGateway()
+                gateway = get_payment_gateway()
                 intent = gateway.create_intent(
                     amount=tier.price,
                     currency="AUD",
@@ -86,7 +88,7 @@ class RegistrationConfirmView(APIView):
             )
 
         intent_id = request.data.get("intent_id", "")
-        gateway = StubPaymentGateway()
+        gateway = get_payment_gateway()
         verification = gateway.verify_intent(intent_id=intent_id)
 
         if not verification.success:
@@ -135,6 +137,51 @@ class MyRegistrationsView(APIView):
             .order_by("-registered_at")
         )
         return Response(RegistrationSerializer(registrations, many=True).data)
+
+
+# ---------------------------------------------------------------------------
+# Refund
+# ---------------------------------------------------------------------------
+
+class RegistrationRefundView(APIView):
+    """
+    Organizer-initiated refund for a confirmed paid registration.
+    POST /api/registrations/<pk>/refund/  { "reason": "..." }
+    """
+    permission_classes = [IsOrganizer | IsAdmin]
+
+    def post(self, request, pk: int) -> Response:
+        registration = get_object_or_404(
+            Registration.objects.select_related(
+                "ticket_tier__event__organizer__user", "payment"
+            ),
+            pk=pk,
+        )
+
+        # Only the event's organizer (or an admin) may issue refunds
+        if (
+            not request.user.role == "ADMIN"
+            and registration.ticket_tier.event.organizer.user != request.user
+        ):
+            return _err("permission_denied", "You do not own this event.", status.HTTP_403_FORBIDDEN)
+
+        serializer = RefundCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            service = RegisterForEventService()
+            registration = service.refund(
+                registration=registration,
+                reason=serializer.validated_data["reason"],
+            )
+        except ValueError as exc:
+            return _err("refund_not_allowed", str(exc), status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return _err("gateway_error", str(exc), status.HTTP_502_BAD_GATEWAY)
+
+        # Return the latest refund record
+        refund = registration.refunds.order_by("-refunded_at").first()
+        return Response(RefundSerializer(refund).data, status=status.HTTP_200_OK)
 
 
 # ---------------------------------------------------------------------------

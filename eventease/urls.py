@@ -5,6 +5,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from accounts.urls import admin_urlpatterns
+from registrations.webhooks import stripe_webhook
 
 urlpatterns = [
     path("admin/", django_admin.site.urls),
@@ -23,6 +24,9 @@ urlpatterns = [
 
     # Analytics → /api/events/{id}/analytics/, /api/events/{id}/attendees.csv
     path("api/", include("analytics.urls", namespace="analytics")),
+
+    # Stripe webhook — must use raw request body; exempt from CSRF
+    path("api/webhooks/stripe/", stripe_webhook, name="stripe_webhook"),
 
     # OpenAPI docs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

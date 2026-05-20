@@ -98,6 +98,20 @@ class EventPublishView(EventOwnershipMixin, APIView):
         return Response({"detail": "Event published.", "status": event.status})
 
 
+class EventUnpublishView(EventOwnershipMixin, APIView):
+    permission_classes = [IsOrganizer]
+
+    def post(self, request, pk: int) -> Response:
+        event = self.get_owned_event(pk)
+        if event.status != Event.Status.PUBLISHED:
+            return Response(
+                {"error": "event_not_published", "detail": "Only published events can be unpublished."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        event.unpublish()
+        return Response({"detail": "Event unpublished.", "status": event.status})
+
+
 class EventCancelView(EventOwnershipMixin, APIView):
     permission_classes = [IsOrganizer]
 

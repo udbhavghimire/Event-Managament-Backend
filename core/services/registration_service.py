@@ -4,7 +4,7 @@ Both free and paid flows share this service; only the entry point differs.
 """
 import uuid
 
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -78,6 +78,66 @@ class RegisterForEventService:
         )
 
         self._send_ticket_safe(registration)
+        return registration
+
+    @transaction.atomic
+    def refund(self, *, registration, reason: str, gateway=None):
+        """
+        Issue a refund for a CONFIRMED paid registration.
+        - Calls the payment gateway refund API.
+        - Creates a Refund audit record.
+        - Marks the Payment as REFUNDED.
+        - Marks the Registration as REFUNDED.
+        - Decrements quantity_sold on the ticket tier.
+        """
+        from events.models import TicketTier
+        from registrations.models import Payment, Refund, Registration
+
+        if registration.status not in (
+            Registration.Status.CONFIRMED,
+            Registration.Status.CANCELLED,
+        ):
+            raise ValueError(
+                "Only CONFIRMED or CANCELLED registrations can be refunded."
+            )
+
+        try:
+            payment = registration.payment
+        except Payment.DoesNotExist:
+            raise ValueError("No payment record found — cannot refund a free registration.")
+
+        if payment.status == Payment.Status.REFUNDED:
+            raise ValueError("This payment has already been refunded.")
+
+        if gateway is None:
+            from core.adapters.payment_adapter import get_payment_gateway
+            gateway = get_payment_gateway()
+
+        result = gateway.refund(
+            transaction_id=payment.gateway_ref,
+            amount=payment.amount,
+        )
+        if not result.success:
+            raise RuntimeError(f"Gateway refund failed: {result.error}")
+
+        from registrations.models import Refund as RefundModel
+        RefundModel.objects.create(
+            registration=registration,
+            amount=payment.amount,
+            gateway_ref=result.transaction_id,
+            reason=reason,
+        )
+
+        payment.status = Payment.Status.REFUNDED
+        payment.save(update_fields=["status"])
+
+        registration.status = Registration.Status.REFUNDED
+        registration.save(update_fields=["status"])
+
+        TicketTier.objects.filter(pk=registration.ticket_tier_id).update(
+            quantity_sold=models.F("quantity_sold") - 1
+        )
+
         return registration
 
     def _send_ticket_safe(self, registration) -> None:

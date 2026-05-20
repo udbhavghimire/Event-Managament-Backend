@@ -4,6 +4,7 @@ from .views import (
     EventDetailView,
     EventListCreateView,
     EventPublishView,
+    EventUnpublishView,
     SessionCreateView,
     SessionDetailView,
     TicketTierCreateView,
@@ -18,6 +19,7 @@ urlpatterns = [
     path("events/", EventListCreateView.as_view(), name="event_list_create"),
     path("events/<int:pk>/", EventDetailView.as_view(), name="event_detail"),
     path("events/<int:pk>/publish/", EventPublishView.as_view(), name="event_publish"),
+    path("events/<int:pk>/unpublish/", EventUnpublishView.as_view(), name="event_unpublish"),
     path("events/<int:pk>/cancel/", EventCancelView.as_view(), name="event_cancel"),
 
     # Sessions — nested create + top-level detail

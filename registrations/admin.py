@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CheckIn, Feedback, Payment, Registration
+from .models import CheckIn, Feedback, Payment, Refund, Registration
 
 
 @admin.register(Registration)
@@ -48,3 +48,11 @@ class FeedbackAdmin(admin.ModelAdmin):
     search_fields = ["registration__attendee__user__email"]
     raw_id_fields = ["registration"]
     readonly_fields = ["submitted_at"]
+
+
+@admin.register(Refund)
+class RefundAdmin(admin.ModelAdmin):
+    list_display = ["id", "registration", "amount", "gateway_ref", "refunded_at"]
+    search_fields = ["gateway_ref", "registration__attendee__user__email"]
+    raw_id_fields = ["registration"]
+    readonly_fields = ["refunded_at"]

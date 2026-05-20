@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from events.models import Event, TicketTier
-from .models import CheckIn, Feedback, Payment, Registration
+from .models import CheckIn, Feedback, Payment, Refund, Registration
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -63,3 +63,14 @@ class FeedbackSerializer(serializers.ModelSerializer):
         if request and not value.attendee.user == request.user:
             raise serializers.ValidationError("You can only submit feedback for your own registrations.")
         return value
+
+
+class RefundSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Refund
+        fields = ["id", "registration_id", "amount", "gateway_ref", "reason", "refunded_at"]
+        read_only_fields = fields
+
+
+class RefundCreateSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=1000)
