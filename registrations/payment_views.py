@@ -18,7 +18,8 @@ class PaymentConfigView(APIView):
         return Response(
             {
                 "payment_gateway": gateway,
-                "publishable_key": publishable_key if gateway == "stripe" else "",
+                "publishable_key": publishable_key,
+                "stripe_enabled": gateway == "stripe" and bool(publishable_key),
                 "currency": "aud",
             }
         )
