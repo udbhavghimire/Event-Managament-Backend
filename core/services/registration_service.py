@@ -23,10 +23,11 @@ class RegisterForEventService:
     def execute(self, *, attendee, ticket_tier):
         """
         Free-event path: create a CONFIRMED registration immediately,
-        increment quantity_sold, generate QR token, send ticket email.
+        increment quantity_sold, generate QR token, create a $0 payment
+        record, and send ticket email.
         """
         from events.models import TicketTier
-        from registrations.models import Registration
+        from registrations.models import Payment, Registration
 
         # Re-select with a row lock to prevent over-selling
         tier = TicketTier.objects.select_for_update().get(pk=ticket_tier.pk)
@@ -42,6 +43,14 @@ class RegisterForEventService:
         )
 
         TicketTier.objects.filter(pk=tier.pk).update(quantity_sold=F("quantity_sold") + 1)
+
+        Payment.objects.create(
+            registration=registration,
+            amount=tier.price,
+            gateway_ref="FREE",
+            status=Payment.Status.SUCCEEDED,
+            paid_at=timezone.now(),
+        )
 
         self._send_ticket_safe(registration)
         return registration

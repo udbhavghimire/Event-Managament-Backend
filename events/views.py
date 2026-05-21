@@ -76,7 +76,14 @@ class EventListCreateView(generics.ListCreateAPIView):
         return EventListSerializer
 
     def perform_create(self, serializer):
-        serializer.save(organizer=self.request.user.organizer)
+        event = serializer.save(organizer=self.request.user.organizer)
+        if not event.ticket_tiers.exists():
+            TicketTier.objects.create(
+                event=event,
+                tier_name="Free",
+                price=0,
+                quantity_total=event.capacity,
+            )
 
 
 class EventDetailView(generics.RetrieveUpdateAPIView):
