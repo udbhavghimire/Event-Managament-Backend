@@ -32,7 +32,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: DEFAULT_FROM_EMAIL
-        value: "EventEase <onboarding@resend.dev>"
+        value: "EventEase <noreply@udbhavghimire.com.np>"
       - key: WEB_CONCURRENCY
         value: "2"
 
