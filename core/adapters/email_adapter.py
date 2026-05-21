@@ -1,13 +1,15 @@
 """
-Email adapter — abstract interface + Django-backed implementation.
-Swap EmailSender for a SendGrid or Mailgun concrete class in production.
+Email adapter — abstract interface + concrete implementations.
+  - DjangoEmailSender  : Django SMTP backend (dev / fallback)
+  - ResendEmailSender  : Resend API (production)
+
+Switch by setting EMAIL_PROVIDER=resend in .env (default: resend).
 """
 import abc
 import base64
 import io
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
 
@@ -52,9 +54,11 @@ def _generate_qr_base64(data: str) -> str:
 
 
 class DjangoEmailSender(EmailSender):
-    """Concrete implementation backed by Django's email backend."""
+    """Concrete implementation backed by Django's email backend (SMTP)."""
 
     def send(self, *, subject: str, recipient: str, template: str, context: dict) -> int:
+        from django.core.mail import EmailMultiAlternatives
+
         html_body = render_to_string(template, context)
         msg = EmailMultiAlternatives(
             subject=subject,
@@ -69,6 +73,39 @@ class DjangoEmailSender(EmailSender):
         qr_data_uri = _generate_qr_base64(registration.qr_code)
         return self.send(
             subject=f"Your ticket — {registration.ticket_tier.event.title}",
+            recipient=registration.attendee.user.email,
+            template="emails/ticket.html",
+            context={
+                "registration": registration,
+                "event": registration.ticket_tier.event,
+                "tier": registration.ticket_tier,
+                "attendee": registration.attendee,
+                "qr_data_uri": qr_data_uri,
+            },
+        )
+
+
+class ResendEmailSender(EmailSender):
+    """Concrete implementation backed by the Resend API."""
+
+    def send(self, *, subject: str, recipient: str, template: str, context: dict) -> int:
+        import resend
+
+        resend.api_key = settings.RESEND_API_KEY
+        html_body = render_to_string(template, context)
+        params: resend.Emails.SendParams = {
+            "from": settings.DEFAULT_FROM_EMAIL,
+            "to": [recipient],
+            "subject": subject,
+            "html": html_body,
+        }
+        resend.Emails.send(params)
+        return 1
+
+    def send_ticket(self, *, registration) -> int:
+        qr_data_uri = _generate_qr_base64(registration.qr_code)
+        return self.send(
+            subject=f"Your ticket for {registration.ticket_tier.event.title} is confirmed!",
             recipient=registration.attendee.user.email,
             template="emails/ticket.html",
             context={

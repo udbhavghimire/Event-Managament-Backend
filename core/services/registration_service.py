@@ -4,11 +4,19 @@ Both free and paid flows share this service; only the entry point differs.
 """
 import uuid
 
+from django.conf import settings
 from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from core.adapters.email_adapter import DjangoEmailSender, EmailSender
+from core.adapters.email_adapter import DjangoEmailSender, EmailSender, ResendEmailSender
+
+
+def _default_email_sender() -> EmailSender:
+    """Return the configured email sender based on EMAIL_PROVIDER setting."""
+    if getattr(settings, "EMAIL_PROVIDER", "resend") == "resend":
+        return ResendEmailSender()
+    return DjangoEmailSender()
 
 
 class SoldOutError(Exception):
@@ -17,7 +25,7 @@ class SoldOutError(Exception):
 
 class RegisterForEventService:
     def __init__(self, email_sender: EmailSender | None = None) -> None:
-        self._email = email_sender or DjangoEmailSender()
+        self._email = email_sender or _default_email_sender()
 
     @transaction.atomic
     def execute(self, *, attendee, ticket_tier):

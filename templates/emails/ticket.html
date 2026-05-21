@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+{% load i18n %}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Ticket — {{ event.title }}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin:0; padding:0; background-color:#f0f2f5; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased;">
+
+  <!-- Preheader (hidden preview text) -->
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+    You're in! Your ticket for {{ event.title }} is confirmed. See you there 🎉
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+
+  <!-- Outer wrapper -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f0f2f5;">
+    <tr>
+      <td align="center" style="padding:40px 16px 48px;">
+
+        <!-- Email card -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px; width:100%; background:#ffffff; border-radius:20px;
+                      overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+
+          <!-- ── HEADER ─────────────────────────────────────────── -->
+          <tr>
+            <td style="background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 60%, #a21caf 100%);
+                        padding:52px 48px 44px; text-align:center;">
+              <!-- Logo / brand wordmark -->
+              <p style="margin:0 0 28px 0; font-size:15px; font-weight:700; letter-spacing:3px;
+                         text-transform:uppercase; color:rgba(255,255,255,0.65);">EventEase</p>
+              <!-- Celebration icon -->
+              <div style="width:64px; height:64px; background:rgba(255,255,255,0.15);
+                           border-radius:50%; margin:0 auto 20px; line-height:64px;
+                           font-size:30px; text-align:center;">🎉</div>
+              <!-- Headline -->
+              <h1 style="margin:0 0 10px; color:#ffffff; font-size:28px; font-weight:800;
+                          line-height:1.25; letter-spacing:-0.5px;">{{ event.title }}</h1>
+              <p style="margin:0; color:rgba(255,255,255,0.75); font-size:15px; line-height:1.5;">
+                Hey {{ attendee.user.full_name }}, your spot is locked in!
+              </p>
+            </td>
+          </tr>
+
+          <!-- ── CONFIRMED BADGE ────────────────────────────────── -->
+          <tr>
+            <td align="center" style="padding:28px 48px 0;">
+              <span style="display:inline-block; background:#dcfce7; color:#15803d;
+                             font-size:12px; font-weight:700; letter-spacing:1.5px;
+                             text-transform:uppercase; padding:7px 20px; border-radius:999px;">
+                ✓ &nbsp; Registration Confirmed
+              </span>
+            </td>
+          </tr>
+
+          <!-- ── EVENT DETAILS ──────────────────────────────────── -->
+          <tr>
+            <td style="padding:32px 48px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+
+                <!-- Date & Time -->
+                <tr>
+                  <td style="padding:0 0 20px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="width:44px; vertical-align:top; padding-top:2px;">
+                          <div style="width:36px; height:36px; background:#ede9fe; border-radius:10px;
+                                       line-height:36px; text-align:center; font-size:18px;">📅</div>
+                        </td>
+                        <td style="padding-left:12px; vertical-align:top;">
+                          <p style="margin:0; font-size:11px; font-weight:700; color:#9ca3af;
+                                     text-transform:uppercase; letter-spacing:1px;">Date &amp; Time</p>
+                          <p style="margin:4px 0 0; font-size:15px; font-weight:700; color:#111827;">
+                            {{ event.start_time|date:"l, F j, Y" }}
+                          </p>
+                          <p style="margin:3px 0 0; font-size:14px; color:#4b5563;">
+                            {{ event.start_time|time:"g:i A" }}&nbsp;–&nbsp;{{ event.end_time|time:"g:i A" }}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Divider -->
+                <tr><td style="border-top:1px solid #f3f4f6; padding-bottom:20px;"></td></tr>
+
+                <!-- Venue -->
+                <tr>
+                  <td style="padding:0 0 20px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="width:44px; vertical-align:top; padding-top:2px;">
+                          <div style="width:36px; height:36px; background:#fce7f3; border-radius:10px;
+                                       line-height:36px; text-align:center; font-size:18px;">📍</div>
+                        </td>
+                        <td style="padding-left:12px; vertical-align:top;">
+                          <p style="margin:0; font-size:11px; font-weight:700; color:#9ca3af;
+                                     text-transform:uppercase; letter-spacing:1px;">Venue</p>
+                          <p style="margin:4px 0 0; font-size:15px; font-weight:700; color:#111827;">
+                            {{ event.venue }}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Divider -->
+                <tr><td style="border-top:1px solid #f3f4f6; padding-bottom:20px;"></td></tr>
+
+                <!-- Ticket tier & price -->
+                <tr>
+                  <td style="padding:0 0 24px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="width:44px; vertical-align:top; padding-top:2px;">
+                          <div style="width:36px; height:36px; background:#fef9c3; border-radius:10px;
+                                       line-height:36px; text-align:center; font-size:18px;">🎟️</div>
+                        </td>
+                        <td style="padding-left:12px; vertical-align:top;">
+                          <p style="margin:0; font-size:11px; font-weight:700; color:#9ca3af;
+                                     text-transform:uppercase; letter-spacing:1px;">Ticket</p>
+                          <p style="margin:4px 0 0; font-size:15px; font-weight:700; color:#111827;">
+                            {{ tier.tier_name }}
+                          </p>
+                          <p style="margin:3px 0 0; font-size:14px; color:#4b5563;">
+                            {% if tier.price == 0 %}
+                              Free admission
+                            {% else %}
+                              ${{ tier.price }}
+                            {% endif %}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── DASHED TICKET STUB DIVIDER ─────────────────────── -->
+          <tr>
+            <td style="padding:0 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:2px dashed #d1d5db;"></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── QR CODE ─────────────────────────────────────────── -->
+          <tr>
+            <td align="center" style="background:#fafafa; padding:36px 48px 32px;">
+              <p style="margin:0 0 20px; font-size:11px; font-weight:700; color:#9ca3af;
+                         text-transform:uppercase; letter-spacing:1.5px;">Your Entry Pass</p>
+
+              <!-- QR container with subtle border -->
+              <div style="display:inline-block; background:#ffffff; border:1px solid #e5e7eb;
+                           border-radius:16px; padding:16px; box-shadow:0 4px 16px rgba(0,0,0,0.06);">
+                <img src="{{ qr_data_uri }}"
+                     alt="QR Code for {{ event.title }}"
+                     width="180" height="180"
+                     style="display:block; border-radius:8px;">
+              </div>
+
+              <!-- Ref number -->
+              <p style="margin:18px 0 0; font-size:13px; color:#6b7280; font-family:monospace;">
+                Ref #&nbsp;{{ registration.qr_code|slice:":16"|upper }}
+              </p>
+              <p style="margin:6px 0 0; font-size:12px; color:#9ca3af;">
+                Present this QR code at the entrance
+              </p>
+            </td>
+          </tr>
+
+          <!-- ── ATTENDEE SUMMARY ───────────────────────────────── -->
+          <tr>
+            <td style="background:#fafafa; border-top:1px solid #f3f4f6;
+                        padding:20px 48px 24px; text-align:center;">
+              <p style="margin:0; font-size:14px; color:#374151;">
+                Registered for <strong style="color:#4f46e5;">{{ attendee.user.full_name }}</strong>
+              </p>
+              <p style="margin:5px 0 0; font-size:13px; color:#9ca3af;">{{ attendee.user.email }}</p>
+            </td>
+          </tr>
+
+          <!-- ── WHAT TO BRING BOX ──────────────────────────────── -->
+          <tr>
+            <td style="padding:28px 48px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background:#f5f3ff; border-radius:12px; border-left:4px solid #7c3aed;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 10px; font-size:13px; font-weight:700; color:#4f46e5;
+                               text-transform:uppercase; letter-spacing:1px;">What to bring</p>
+                    <p style="margin:0; font-size:14px; color:#374151; line-height:1.7;">
+                      ✔ &nbsp;This email (printed or on your phone)<br>
+                      ✔ &nbsp;A valid photo ID<br>
+                      ✔ &nbsp;Your QR code ready to scan
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ──────────────────────────────────────────── -->
+          <tr>
+            <td style="background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+                        padding:28px 48px; text-align:center;">
+              <p style="margin:0 0 6px; font-size:14px; color:rgba(255,255,255,0.95); font-weight:600;">
+                Organised by {{ event.organizer.organisation_name }}
+              </p>
+              {% if event.organizer.contact_phone %}
+              <p style="margin:0 0 6px; font-size:13px; color:rgba(255,255,255,0.7);">
+                {{ event.organizer.contact_phone }}
+              </p>
+              {% endif %}
+              <p style="margin:12px 0 0; font-size:12px; color:rgba(255,255,255,0.5);">
+                Powered by EventEase &nbsp;·&nbsp; Do not reply to this email
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Email card -->
+
+        <!-- Bottom note -->
+        <p style="margin:24px 0 0; font-size:12px; color:#9ca3af; text-align:center;">
+          If you didn't register for this event, please ignore this email.
+        </p>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
