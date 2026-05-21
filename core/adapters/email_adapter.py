@@ -12,6 +12,9 @@ import io
 from django.conf import settings
 from django.template.loader import render_to_string
 
+# Content-ID referenced in templates/emails/ticket.html as cid:qr-code
+QR_INLINE_CONTENT_ID = "qr-code"
+
 
 class EmailSender(abc.ABC):
     """Abstract contract every email provider must satisfy."""
@@ -27,12 +30,8 @@ class EmailSender(abc.ABC):
         ...
 
 
-def _generate_qr_base64(data: str) -> str:
-    """
-    Render *data* as a QR code PNG and return a base64-encoded data URI
-    suitable for embedding directly in HTML: data:image/png;base64,...
-    Uses Pillow (PIL) as the image backend (installed via qrcode[pil]).
-    """
+def _generate_qr_png(data: str) -> bytes:
+    """Render *data* as a QR code PNG and return raw bytes."""
     import qrcode
     from qrcode.image.styledpil import StyledPilImage
 
@@ -49,8 +48,17 @@ def _generate_qr_base64(data: str) -> str:
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
-    encoded = base64.b64encode(buffer.read()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+    return buffer.read()
+
+
+def _ticket_context(registration) -> dict:
+    return {
+        "registration": registration,
+        "event": registration.ticket_tier.event,
+        "tier": registration.ticket_tier,
+        "attendee": registration.attendee,
+        "qr_cid": QR_INLINE_CONTENT_ID,
+    }
 
 
 class DjangoEmailSender(EmailSender):
@@ -70,19 +78,24 @@ class DjangoEmailSender(EmailSender):
         return msg.send(fail_silently=False)
 
     def send_ticket(self, *, registration) -> int:
-        qr_data_uri = _generate_qr_base64(registration.qr_code)
-        return self.send(
+        from email.mime.image import MIMEImage
+
+        from django.core.mail import EmailMultiAlternatives
+
+        png_bytes = _generate_qr_png(registration.qr_code)
+        html_body = render_to_string("emails/ticket.html", _ticket_context(registration))
+        msg = EmailMultiAlternatives(
             subject=f"Your ticket — {registration.ticket_tier.event.title}",
-            recipient=registration.attendee.user.email,
-            template="emails/ticket.html",
-            context={
-                "registration": registration,
-                "event": registration.ticket_tier.event,
-                "tier": registration.ticket_tier,
-                "attendee": registration.attendee,
-                "qr_data_uri": qr_data_uri,
-            },
+            body="",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[registration.attendee.user.email],
         )
+        msg.attach_alternative(html_body, "text/html")
+        inline = MIMEImage(png_bytes, _subtype="png")
+        inline.add_header("Content-ID", f"<{QR_INLINE_CONTENT_ID}>")
+        inline.add_header("Content-Disposition", "inline", filename="qr-code.png")
+        msg.attach(inline)
+        return msg.send(fail_silently=False)
 
 
 class ResendEmailSender(EmailSender):
@@ -103,16 +116,23 @@ class ResendEmailSender(EmailSender):
         return 1
 
     def send_ticket(self, *, registration) -> int:
-        qr_data_uri = _generate_qr_base64(registration.qr_code)
-        return self.send(
-            subject=f"Your ticket for {registration.ticket_tier.event.title} is confirmed!",
-            recipient=registration.attendee.user.email,
-            template="emails/ticket.html",
-            context={
-                "registration": registration,
-                "event": registration.ticket_tier.event,
-                "tier": registration.ticket_tier,
-                "attendee": registration.attendee,
-                "qr_data_uri": qr_data_uri,
-            },
-        )
+        import resend
+
+        resend.api_key = settings.RESEND_API_KEY
+        png_bytes = _generate_qr_png(registration.qr_code)
+        html_body = render_to_string("emails/ticket.html", _ticket_context(registration))
+        params: resend.Emails.SendParams = {
+            "from": settings.DEFAULT_FROM_EMAIL,
+            "to": [registration.attendee.user.email],
+            "subject": f"Your ticket for {registration.ticket_tier.event.title} is confirmed!",
+            "html": html_body,
+            "attachments": [
+                {
+                    "filename": "qr-code.png",
+                    "content": base64.b64encode(png_bytes).decode("ascii"),
+                    "content_id": QR_INLINE_CONTENT_ID,
+                }
+            ],
+        }
+        resend.Emails.send(params)
+        return 1
