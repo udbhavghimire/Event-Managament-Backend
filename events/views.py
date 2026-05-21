@@ -44,6 +44,16 @@ class EventListCreateView(generics.ListCreateAPIView):
     ordering = ["start_time"]
 
     def get_queryset(self):
+        mine = self.request.query_params.get("mine") == "true"
+
+        if mine:
+            return (
+                Event.objects
+                .filter(organizer=self.request.user.organizer)
+                .select_related("organizer")
+                .prefetch_related("ticket_tiers")
+            )
+
         qs = Event.objects.filter(
             status=Event.Status.PUBLISHED
         ).select_related("organizer").prefetch_related("ticket_tiers")
@@ -55,6 +65,8 @@ class EventListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
+            return [IsOrganizer()]
+        if self.request.query_params.get("mine") == "true":
             return [IsOrganizer()]
         return [permissions.AllowAny()]
 
