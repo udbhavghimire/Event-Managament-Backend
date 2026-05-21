@@ -32,11 +32,13 @@ class TicketTierSerializer(serializers.ModelSerializer):
 
 class EventListSerializer(serializers.ModelSerializer):
     ticket_tiers = serializers.SerializerMethodField()
+    organizer = serializers.CharField(source="organizer.organisation_name", read_only=True)
 
     class Meta:
         model = Event
         fields = [
             "id",
+            "organizer",
             "title",
             "venue",
             "start_time",
