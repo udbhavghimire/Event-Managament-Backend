@@ -20,7 +20,7 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.0"
       - key: PAYMENT_GATEWAY
-        value: "stub"
+        value: "stripe"
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_PUBLISHABLE_KEY

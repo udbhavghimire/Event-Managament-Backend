@@ -66,6 +66,7 @@ class RegistrationCreateView(APIView):
                     {
                         "registration_id": registration.pk,
                         "client_secret": intent.client_secret,
+                        "payment_intent_id": intent.intent_id,
                     },
                     status=status.HTTP_201_CREATED,
                 )
