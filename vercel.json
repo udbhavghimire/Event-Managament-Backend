@@ -16,6 +16,7 @@
     }
   ],
   "env": {
-    "DJANGO_SETTINGS_MODULE": "eventease.settings.prod"
+    "DJANGO_SETTINGS_MODULE": "eventease.settings.prod",
+    "ALLOWED_HOSTS": "ezevent-management.vercel.app"
   }
 }
