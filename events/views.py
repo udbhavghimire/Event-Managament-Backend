@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import filters, generics, mixins, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -40,7 +41,7 @@ class EventListCreateView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = EventFilter
     search_fields = ["title", "description"]
-    ordering_fields = ["start_time"]
+    ordering_fields = ["start_time", "id"]
     ordering = ["start_time"]
 
     def get_queryset(self):
@@ -55,7 +56,8 @@ class EventListCreateView(generics.ListCreateAPIView):
             )
 
         qs = Event.objects.filter(
-            status=Event.Status.PUBLISHED
+            status=Event.Status.PUBLISHED,
+            start_time__gte=timezone.now(),
         ).select_related("organizer").prefetch_related("ticket_tiers")
 
         from_date = self.request.query_params.get("from")

@@ -33,6 +33,7 @@ class TicketTierSerializer(serializers.ModelSerializer):
 class EventListSerializer(serializers.ModelSerializer):
     ticket_tiers = serializers.SerializerMethodField()
     organizer = serializers.CharField(source="organizer.organisation_name", read_only=True)
+    registrations_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -40,13 +41,18 @@ class EventListSerializer(serializers.ModelSerializer):
             "id",
             "organizer",
             "title",
+            "description",
             "venue",
             "start_time",
             "end_time",
             "status",
             "capacity",
+            "registrations_count",
             "ticket_tiers",
         ]
+
+    def get_registrations_count(self, obj: Event) -> int:
+        return sum(t.quantity_sold for t in obj.ticket_tiers.all())
 
     def get_ticket_tiers(self, obj: Event) -> dict | None:
         """Return only the cheapest tier for list views."""
@@ -56,6 +62,7 @@ class EventListSerializer(serializers.ModelSerializer):
         return {
             "tier_name": tier.tier_name,
             "price": str(tier.price),
+            "quantity_sold": tier.quantity_sold,
             "quantity_remaining": tier.quantity_total - tier.quantity_sold,
         }
 
