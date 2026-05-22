@@ -19,6 +19,13 @@ class Event(models.Model):
     venue = models.CharField(max_length=255)
     capacity = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    image = models.ImageField(upload_to="events/images/%Y/%m/", blank=True, null=True)
+    image_thumbnail = models.ImageField(
+        upload_to="events/thumbnails/%Y/%m/",
+        blank=True,
+        null=True,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

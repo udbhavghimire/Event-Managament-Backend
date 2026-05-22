@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import filters, generics, mixins, permissions, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -38,6 +39,7 @@ class EventOwnershipMixin:
 # ---------------------------------------------------------------------------
 
 class EventListCreateView(generics.ListCreateAPIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = EventFilter
     search_fields = ["title", "description"]
@@ -89,6 +91,7 @@ class EventListCreateView(generics.ListCreateAPIView):
 
 
 class EventDetailView(generics.RetrieveUpdateAPIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     queryset = Event.objects.select_related("organizer").prefetch_related("sessions", "ticket_tiers")
     lookup_field = "pk"
     http_method_names = ["get", "patch", "head", "options"]
