@@ -79,6 +79,7 @@ class EventListSerializer(serializers.ModelSerializer):
 class EventDetailSerializer(serializers.ModelSerializer):
     sessions = SessionSerializer(many=True, read_only=True)
     ticket_tiers = TicketTierSerializer(many=True, read_only=True)
+    registrations_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -92,9 +93,19 @@ class EventDetailSerializer(serializers.ModelSerializer):
             "end_time",
             "capacity",
             "status",
+            "registrations_count",
             "sessions",
             "ticket_tiers",
         ]
+
+    def get_registrations_count(self, obj: Event) -> int:
+        return Registration.objects.filter(
+            ticket_tier__event=obj,
+            status__in=(
+                Registration.Status.CONFIRMED,
+                Registration.Status.REFUND_PENDING,
+            ),
+        ).count()
 
 
 class EventCreateSerializer(serializers.ModelSerializer):

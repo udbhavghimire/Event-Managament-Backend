@@ -2,6 +2,11 @@ import django.utils.timezone
 from django.db import migrations, models
 
 
+def mark_existing_refunds_approved(apps, schema_editor):
+    Refund = apps.get_model("registrations", "Refund")
+    Refund.objects.exclude(gateway_ref="").update(status="APPROVED")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -56,4 +61,5 @@ class Migration(migrations.Migration):
             name="refunded_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
+        migrations.RunPython(mark_existing_refunds_approved, migrations.RunPython.noop),
     ]
