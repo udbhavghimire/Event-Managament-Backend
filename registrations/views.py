@@ -1,3 +1,4 @@
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -12,10 +13,13 @@ from .models import CheckIn, Feedback, Registration
 from .serializers import (
     CheckInSerializer,
     FeedbackSerializer,
+    MyRegistrationSerializer,
     RegistrationCreateSerializer,
     RegistrationSerializer,
     RefundCreateSerializer,
     RefundSerializer,
+    _is_free_registration,
+    _is_paid_registration,
 )
 
 
@@ -116,16 +120,35 @@ class RegistrationCancelView(APIView):
 
     def post(self, request, pk: int) -> Response:
         registration = get_object_or_404(
-            Registration, pk=pk, attendee__user=request.user
+            Registration.objects.select_related("ticket_tier", "payment"),
+            pk=pk,
+            attendee__user=request.user,
         )
-        if registration.status == Registration.Status.CANCELLED:
+        if registration.status in (
+            Registration.Status.CANCELLED,
+            Registration.Status.REFUNDED,
+        ):
             return _err(
-                "already_cancelled",
-                "This registration is already cancelled.",
+                "cannot_cancel",
+                "This registration can no longer be cancelled.",
                 status.HTTP_400_BAD_REQUEST,
             )
+        if registration.status == Registration.Status.CONFIRMED and _is_paid_registration(
+            registration
+        ):
+            return _err(
+                "use_refund",
+                "Paid registrations cannot be cancelled. Request a refund instead.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+        if registration.status == Registration.Status.CONFIRMED:
+            from events.models import TicketTier
+
+            TicketTier.objects.filter(pk=registration.ticket_tier_id).update(
+                quantity_sold=F("quantity_sold") - 1
+            )
         registration.cancel()
-        return Response(RegistrationSerializer(registration).data)
+        return Response(MyRegistrationSerializer(registration).data)
 
 
 class MyRegistrationsView(APIView):
@@ -135,9 +158,10 @@ class MyRegistrationsView(APIView):
         registrations = (
             Registration.objects.filter(attendee__user=request.user)
             .select_related("ticket_tier__event")
+            .prefetch_related("payment")
             .order_by("-registered_at")
         )
-        return Response(RegistrationSerializer(registrations, many=True).data)
+        return Response(MyRegistrationSerializer(registrations, many=True).data)
 
 
 # ---------------------------------------------------------------------------
@@ -146,10 +170,11 @@ class MyRegistrationsView(APIView):
 
 class RegistrationRefundView(APIView):
     """
-    Organizer-initiated refund for a confirmed paid registration.
+    Refund a confirmed paid registration.
+    Attendees may refund their own ticket; organizers may refund any ticket on their event.
     POST /api/registrations/<pk>/refund/  { "reason": "..." }
     """
-    permission_classes = [IsOrganizer | IsAdmin]
+    permission_classes = [IsAttendee | IsOrganizer | IsAdmin]
 
     def post(self, request, pk: int) -> Response:
         registration = get_object_or_404(
@@ -159,11 +184,27 @@ class RegistrationRefundView(APIView):
             pk=pk,
         )
 
-        # Only the event's organizer (or an admin) may issue refunds
-        if (
-            not request.user.role == "ADMIN"
-            and registration.ticket_tier.event.organizer.user != request.user
-        ):
+        role = request.user.role
+        if role == "ATTENDEE":
+            if registration.attendee.user != request.user:
+                return _err(
+                    "permission_denied",
+                    "You can only refund your own registrations.",
+                    status.HTTP_403_FORBIDDEN,
+                )
+            if registration.status != Registration.Status.CONFIRMED:
+                return _err(
+                    "refund_not_allowed",
+                    "Only confirmed registrations can be refunded.",
+                    status.HTTP_400_BAD_REQUEST,
+                )
+            if not _is_paid_registration(registration):
+                return _err(
+                    "refund_not_allowed",
+                    "Free registrations do not require a refund.",
+                    status.HTTP_400_BAD_REQUEST,
+                )
+        elif role != "ADMIN" and registration.ticket_tier.event.organizer.user != request.user:
             return _err("permission_denied", "You do not own this event.", status.HTTP_403_FORBIDDEN)
 
         serializer = RefundCreateSerializer(data=request.data)
@@ -180,7 +221,6 @@ class RegistrationRefundView(APIView):
         except RuntimeError as exc:
             return _err("gateway_error", str(exc), status.HTTP_502_BAD_GATEWAY)
 
-        # Return the latest refund record
         refund = registration.refunds.order_by("-refunded_at").first()
         return Response(RefundSerializer(refund).data, status=status.HTTP_200_OK)
 
