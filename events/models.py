@@ -19,11 +19,13 @@ class Event(models.Model):
     venue = models.CharField(max_length=255)
     capacity = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "events_event"
         indexes = [
             models.Index(fields=["status"], name="idx_event_status"),
+            models.Index(fields=["-created_at"], name="idx_event_created_at"),
         ]
 
     def __str__(self) -> str:

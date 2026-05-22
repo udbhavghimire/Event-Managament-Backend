@@ -41,7 +41,7 @@ class EventListCreateView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = EventFilter
     search_fields = ["title", "description"]
-    ordering_fields = ["start_time", "id"]
+    ordering_fields = ["start_time", "created_at"]
     ordering = ["start_time"]
 
     def get_queryset(self):
