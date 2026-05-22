@@ -1,7 +1,7 @@
 from django.contrib import admin as django_admin
 from django.conf import settings
-from django.conf.urls.static import static
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve as serve_media
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from accounts.urls import admin_urlpatterns, setup_urlpatterns
@@ -37,4 +37,13 @@ urlpatterns = [
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# django.conf.urls.static.static() only registers when DEBUG=True, so uploaded
+# files 404 under production settings. Serve media explicitly instead.
+if settings.MEDIA_ROOT:
+    urlpatterns += [
+        re_path(
+            r"^media/(?P<path>.*)$",
+            serve_media,
+            {"document_root": settings.MEDIA_ROOT},
+        ),
+    ]
