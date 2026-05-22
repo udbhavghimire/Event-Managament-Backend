@@ -1,3 +1,6 @@
+import mimetypes
+
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import filters, generics, mixins, permissions, status
@@ -111,6 +114,61 @@ class EventDetailView(generics.RetrieveUpdateAPIView):
         if request.method not in permissions.SAFE_METHODS:
             if obj.organizer.user != request.user:
                 raise PermissionDenied("You do not own this event.")
+
+
+class EventImageView(APIView):
+    """Serve full-resolution event image from database (Render-safe)."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk: int) -> HttpResponse:
+        event = get_object_or_404(Event, pk=pk)
+        if event.image_data:
+            return HttpResponse(
+                bytes(event.image_data),
+                content_type=event.image_mime_type or "image/jpeg",
+            )
+        if event.image:
+            try:
+                content_type = mimetypes.guess_type(event.image.name)[0] or "image/jpeg"
+                return FileResponse(event.image.open("rb"), content_type=content_type)
+            except (FileNotFoundError, OSError):
+                pass
+        raise Http404("Image not found.")
+
+
+class EventImageThumbnailView(APIView):
+    """Serve low-resolution thumbnail from database (Render-safe)."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk: int) -> HttpResponse:
+        event = get_object_or_404(Event, pk=pk)
+        if event.image_thumbnail_data:
+            return HttpResponse(
+                bytes(event.image_thumbnail_data),
+                content_type=event.image_thumbnail_mime_type or "image/jpeg",
+            )
+        if event.image_data:
+            return HttpResponse(
+                bytes(event.image_data),
+                content_type=event.image_mime_type or "image/jpeg",
+            )
+        if event.image_thumbnail:
+            try:
+                return FileResponse(
+                    event.image_thumbnail.open("rb"),
+                    content_type="image/jpeg",
+                )
+            except (FileNotFoundError, OSError):
+                pass
+        if event.image:
+            try:
+                content_type = mimetypes.guess_type(event.image.name)[0] or "image/jpeg"
+                return FileResponse(event.image.open("rb"), content_type=content_type)
+            except (FileNotFoundError, OSError):
+                pass
+        raise Http404("Image not found.")
 
 
 class EventPublishView(EventOwnershipMixin, APIView):

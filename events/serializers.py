@@ -1,6 +1,7 @@
 import os
 
 from django.conf import settings
+from django.urls import reverse
 from rest_framework import serializers
 
 from registrations.models import Registration
@@ -8,17 +9,25 @@ from registrations.models import Registration
 from .models import Event, Session, TicketTier
 
 
-def build_media_url(file_field, request) -> str | None:
-    """Return an absolute URL for a FileField, or None if empty."""
-    if not file_field:
-        return None
-    url = file_field.url
+def build_event_image_url(obj: Event, request, *, thumbnail: bool = False) -> str | None:
+    """
+    Return an API URL that serves image bytes from the database.
+    Works on Render where /media/ files are lost after redeploy.
+    """
+    if thumbnail:
+        if not obj.has_stored_thumbnail and not obj.has_stored_image and not obj.image:
+            return None
+        route_name = "events:event_image_thumb"
+    else:
+        if not obj.has_stored_image and not obj.image:
+            return None
+        route_name = "events:event_image"
+
+    path = reverse(route_name, kwargs={"pk": obj.pk})
     if request is not None:
-        return request.build_absolute_uri(url)
+        return request.build_absolute_uri(path)
     base = getattr(settings, "API_BASE_URL", "").rstrip("/")
-    if base:
-        return f"{base}{url}"
-    return url
+    return f"{base}{path}" if base else path
 
 
 class SessionSerializer(serializers.ModelSerializer):
@@ -74,9 +83,7 @@ class EventListSerializer(serializers.ModelSerializer):
 
     def get_image_url(self, obj: Event) -> str | None:
         """Low-res thumbnail for list/card views."""
-        request = self.context.get("request")
-        thumb = obj.image_thumbnail if obj.image_thumbnail else obj.image
-        return build_media_url(thumb, request)
+        return build_event_image_url(obj, self.context.get("request"), thumbnail=True)
 
     def get_registrations_count(self, obj: Event) -> int:
         """Active registrations only (excludes refunded and cancelled)."""
@@ -129,13 +136,10 @@ class EventDetailSerializer(serializers.ModelSerializer):
 
     def get_image_url(self, obj: Event) -> str | None:
         """Full-resolution image for detail views."""
-        request = self.context.get("request")
-        return build_media_url(obj.image, request)
+        return build_event_image_url(obj, self.context.get("request"), thumbnail=False)
 
     def get_image_thumbnail_url(self, obj: Event) -> str | None:
-        request = self.context.get("request")
-        thumb = obj.image_thumbnail if obj.image_thumbnail else obj.image
-        return build_media_url(thumb, request)
+        return build_event_image_url(obj, self.context.get("request"), thumbnail=True)
 
     def get_registrations_count(self, obj: Event) -> int:
         return Registration.objects.filter(
@@ -190,20 +194,7 @@ class EventCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        from .image_utils import generate_event_thumbnail
-
-        instance = super().create(validated_data)
-        if instance.image:
-            generate_event_thumbnail(instance)
-            instance.save(update_fields=["image_thumbnail"])
-        return instance
+        return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        from .image_utils import generate_event_thumbnail
-
-        image_updated = "image" in validated_data
-        instance = super().update(instance, validated_data)
-        if image_updated and instance.image:
-            generate_event_thumbnail(instance)
-            instance.save(update_fields=["image_thumbnail"])
-        return instance
+        return super().update(instance, validated_data)

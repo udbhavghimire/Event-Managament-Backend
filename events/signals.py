@@ -1,19 +1,23 @@
-"""Generate thumbnails when an event image is saved via admin or other non-API paths."""
+"""Sync uploaded files into database storage after save."""
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from .image_utils import generate_event_thumbnail
+from .image_storage import persist_event_images
 from .models import Event
 
 
 @receiver(post_save, sender=Event)
-def create_event_thumbnail(sender, instance: Event, **kwargs) -> None:
-    if kwargs.get("update_fields") == ["image_thumbnail"]:
-        return
-    if not instance.image:
-        return
-    generate_event_thumbnail(instance)
-    if instance.image_thumbnail:
-        Event.objects.filter(pk=instance.pk).update(
-            image_thumbnail=instance.image_thumbnail.name
-        )
+def sync_event_images_to_database(sender, instance: Event, **kwargs) -> None:
+    update_fields = kwargs.get("update_fields")
+    if update_fields is not None:
+        skip = {
+            "image_data",
+            "image_mime_type",
+            "image_thumbnail_data",
+            "image_thumbnail_mime_type",
+            "image_thumbnail",
+        }
+        if set(update_fields) <= skip:
+            return
+    if instance.image:
+        persist_event_images(instance)

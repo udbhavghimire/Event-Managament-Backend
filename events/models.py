@@ -26,7 +26,20 @@ class Event(models.Model):
         null=True,
         editable=False,
     )
+    # Stored in DB so images persist on Render (ephemeral filesystem loses /media/ files).
+    image_data = models.BinaryField(null=True, blank=True, editable=False)
+    image_mime_type = models.CharField(max_length=100, blank=True, default="")
+    image_thumbnail_data = models.BinaryField(null=True, blank=True, editable=False)
+    image_thumbnail_mime_type = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def has_stored_image(self) -> bool:
+        return bool(self.image_data)
+
+    @property
+    def has_stored_thumbnail(self) -> bool:
+        return bool(self.image_thumbnail_data)
 
     class Meta:
         db_table = "events_event"
