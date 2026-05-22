@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from registrations.models import Registration
+
 from .models import Event, Session, TicketTier
 
 
@@ -52,7 +54,14 @@ class EventListSerializer(serializers.ModelSerializer):
         ]
 
     def get_registrations_count(self, obj: Event) -> int:
-        return sum(t.quantity_sold for t in obj.ticket_tiers.all())
+        """Active registrations only (excludes refunded and cancelled)."""
+        return Registration.objects.filter(
+            ticket_tier__event=obj,
+            status__in=(
+                Registration.Status.CONFIRMED,
+                Registration.Status.REFUND_PENDING,
+            ),
+        ).count()
 
     def get_ticket_tiers(self, obj: Event) -> dict | None:
         """Return only the cheapest tier for list views."""

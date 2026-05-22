@@ -127,6 +127,7 @@ class RegistrationCancelView(APIView):
         if registration.status in (
             Registration.Status.CANCELLED,
             Registration.Status.REFUNDED,
+            Registration.Status.REFUND_PENDING,
         ):
             return _err(
                 "cannot_cancel",
@@ -158,7 +159,7 @@ class MyRegistrationsView(APIView):
         registrations = (
             Registration.objects.filter(attendee__user=request.user)
             .select_related("ticket_tier__event")
-            .prefetch_related("payment")
+            .prefetch_related("payment", "refunds")
             .order_by("-registered_at")
         )
         return Response(MyRegistrationSerializer(registrations, many=True).data)
@@ -168,13 +169,49 @@ class MyRegistrationsView(APIView):
 # Refund
 # ---------------------------------------------------------------------------
 
-class RegistrationRefundView(APIView):
+class RegistrationRefundRequestView(APIView):
     """
-    Refund a confirmed paid registration.
-    Attendees may refund their own ticket; organizers may refund any ticket on their event.
+    Attendee submits a refund request (pending organizer approval).
     POST /api/registrations/<pk>/refund/  { "reason": "..." }
     """
-    permission_classes = [IsAttendee | IsOrganizer | IsAdmin]
+    permission_classes = [IsAttendee]
+
+    def post(self, request, pk: int) -> Response:
+        registration = get_object_or_404(
+            Registration.objects.select_related("ticket_tier", "payment"),
+            pk=pk,
+            attendee__user=request.user,
+        )
+
+        serializer = RefundCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            service = RegisterForEventService()
+            registration = service.request_refund(
+                registration=registration,
+                reason=serializer.validated_data["reason"],
+            )
+        except ValueError as exc:
+            return _err("refund_not_allowed", str(exc), status.HTTP_400_BAD_REQUEST)
+
+        refund = registration.refunds.filter(status="PENDING").order_by("-requested_at").first()
+        return Response(
+            {
+                "detail": "Refund request submitted. Awaiting organizer approval.",
+                "registration": MyRegistrationSerializer(registration).data,
+                "refund": RefundSerializer(refund).data if refund else None,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class RegistrationRefundApproveView(APIView):
+    """
+    Organizer approves a pending refund and processes payment reversal.
+    POST /api/registrations/<pk>/refund/approve/
+    """
+    permission_classes = [IsOrganizer | IsAdmin]
 
     def post(self, request, pk: int) -> Response:
         registration = get_object_or_404(
@@ -184,45 +221,65 @@ class RegistrationRefundView(APIView):
             pk=pk,
         )
 
-        role = request.user.role
-        if role == "ATTENDEE":
-            if registration.attendee.user != request.user:
-                return _err(
-                    "permission_denied",
-                    "You can only refund your own registrations.",
-                    status.HTTP_403_FORBIDDEN,
-                )
-            if registration.status != Registration.Status.CONFIRMED:
-                return _err(
-                    "refund_not_allowed",
-                    "Only confirmed registrations can be refunded.",
-                    status.HTTP_400_BAD_REQUEST,
-                )
-            if not _is_paid_registration(registration):
-                return _err(
-                    "refund_not_allowed",
-                    "Free registrations do not require a refund.",
-                    status.HTTP_400_BAD_REQUEST,
-                )
-        elif role != "ADMIN" and registration.ticket_tier.event.organizer.user != request.user:
+        if (
+            request.user.role != "ADMIN"
+            and registration.ticket_tier.event.organizer.user != request.user
+        ):
             return _err("permission_denied", "You do not own this event.", status.HTTP_403_FORBIDDEN)
-
-        serializer = RefundCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
 
         try:
             service = RegisterForEventService()
-            registration = service.refund(
-                registration=registration,
-                reason=serializer.validated_data["reason"],
-            )
+            registration = service.approve_refund(registration=registration)
         except ValueError as exc:
             return _err("refund_not_allowed", str(exc), status.HTTP_400_BAD_REQUEST)
         except RuntimeError as exc:
             return _err("gateway_error", str(exc), status.HTTP_502_BAD_GATEWAY)
 
-        refund = registration.refunds.order_by("-refunded_at").first()
-        return Response(RefundSerializer(refund).data, status=status.HTTP_200_OK)
+        refund = registration.refunds.filter(status="APPROVED").order_by("-refunded_at").first()
+        return Response(
+            {
+                "detail": "Refund approved and processed.",
+                "registration": RegistrationSerializer(registration).data,
+                "refund": RefundSerializer(refund).data if refund else None,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RegistrationRefundRejectView(APIView):
+    """
+    Organizer rejects a pending refund request.
+    POST /api/registrations/<pk>/refund/reject/
+    """
+    permission_classes = [IsOrganizer | IsAdmin]
+
+    def post(self, request, pk: int) -> Response:
+        registration = get_object_or_404(
+            Registration.objects.select_related(
+                "ticket_tier__event__organizer__user", "payment"
+            ),
+            pk=pk,
+        )
+
+        if (
+            request.user.role != "ADMIN"
+            and registration.ticket_tier.event.organizer.user != request.user
+        ):
+            return _err("permission_denied", "You do not own this event.", status.HTTP_403_FORBIDDEN)
+
+        try:
+            service = RegisterForEventService()
+            registration = service.reject_refund(registration=registration)
+        except ValueError as exc:
+            return _err("refund_not_allowed", str(exc), status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "detail": "Refund request rejected.",
+                "registration": RegistrationSerializer(registration).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # ---------------------------------------------------------------------------

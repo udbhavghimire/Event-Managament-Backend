@@ -109,6 +109,7 @@ class AttendeeCSVExportView(APIView):
             "attendee_email",
             "tier_name",
             "registered_at",
+            "status",
             "checked_in",
         ])
 
@@ -120,6 +121,7 @@ class AttendeeCSVExportView(APIView):
                 reg.attendee.user.email,
                 reg.ticket_tier.tier_name,
                 reg.registered_at.strftime("%Y-%m-%d %H:%M:%S"),
+                reg.status,
                 checked_in,
             ])
 

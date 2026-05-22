@@ -73,7 +73,11 @@ class MyRegistrationSerializer(serializers.ModelSerializer):
         }
 
     def get_can_cancel(self, obj: Registration) -> bool:
-        if obj.status in (Registration.Status.CANCELLED, Registration.Status.REFUNDED):
+        if obj.status in (
+            Registration.Status.CANCELLED,
+            Registration.Status.REFUNDED,
+            Registration.Status.REFUND_PENDING,
+        ):
             return False
         if obj.status == Registration.Status.PENDING:
             return True
@@ -84,7 +88,9 @@ class MyRegistrationSerializer(serializers.ModelSerializer):
     def get_can_refund(self, obj: Registration) -> bool:
         if obj.status != Registration.Status.CONFIRMED:
             return False
-        return _is_paid_registration(obj)
+        if not _is_paid_registration(obj):
+            return False
+        return not obj.refunds.filter(status=Refund.Status.PENDING).exists()
 
 
 def _is_free_registration(registration: Registration) -> bool:
@@ -155,7 +161,16 @@ class FeedbackSerializer(serializers.ModelSerializer):
 class RefundSerializer(serializers.ModelSerializer):
     class Meta:
         model = Refund
-        fields = ["id", "registration_id", "amount", "gateway_ref", "reason", "refunded_at"]
+        fields = [
+            "id",
+            "registration_id",
+            "amount",
+            "gateway_ref",
+            "reason",
+            "status",
+            "requested_at",
+            "refunded_at",
+        ]
         read_only_fields = fields
 
 

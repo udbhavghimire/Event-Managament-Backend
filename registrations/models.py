@@ -6,6 +6,7 @@ class Registration(models.Model):
         PENDING = "PENDING", "Pending"
         CONFIRMED = "CONFIRMED", "Confirmed"
         CANCELLED = "CANCELLED", "Cancelled"
+        REFUND_PENDING = "REFUND_PENDING", "Pending Refund"
         REFUNDED = "REFUNDED", "Refunded"
 
     attendee = models.ForeignKey(
@@ -101,7 +102,12 @@ class Feedback(models.Model):
 
 
 class Refund(models.Model):
-    """Audit log of every refund issued against a registration."""
+    """Audit log of refund requests and completed refunds."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
 
     registration = models.ForeignKey(
         Registration,
@@ -109,9 +115,13 @@ class Refund(models.Model):
         related_name="refunds",
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    gateway_ref = models.CharField(max_length=200)
+    gateway_ref = models.CharField(max_length=200, blank=True, default="")
     reason = models.TextField()
-    refunded_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "registrations_refund"

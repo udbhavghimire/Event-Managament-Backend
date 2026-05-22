@@ -98,30 +98,65 @@ class RegisterForEventService:
         return registration
 
     @transaction.atomic
-    def refund(self, *, registration, reason: str, gateway=None):
-        """
-        Issue a refund for a CONFIRMED paid registration.
-        - Calls the payment gateway refund API.
-        - Creates a Refund audit record.
-        - Marks the Payment as REFUNDED.
-        - Marks the Registration as REFUNDED.
-        - Decrements quantity_sold on the ticket tier.
-        """
-        from events.models import TicketTier
+    def request_refund(self, *, registration, reason: str):
+        """Attendee requests a refund; awaits organizer approval."""
         from registrations.models import Payment, Refund, Registration
 
-        if registration.status not in (
-            Registration.Status.CONFIRMED,
-            Registration.Status.CANCELLED,
-        ):
-            raise ValueError(
-                "Only CONFIRMED or CANCELLED registrations can be refunded."
-            )
+        if registration.status != Registration.Status.CONFIRMED:
+            raise ValueError("Only confirmed registrations can request a refund.")
 
         try:
             payment = registration.payment
         except Payment.DoesNotExist:
             raise ValueError("No payment record found — cannot refund a free registration.")
+
+        if payment.gateway_ref == "FREE" or payment.amount == 0:
+            raise ValueError("Free registrations do not require a refund.")
+
+        if payment.status == Payment.Status.REFUNDED:
+            raise ValueError("This payment has already been refunded.")
+
+        if Refund.objects.filter(
+            registration=registration, status=Refund.Status.PENDING
+        ).exists():
+            raise ValueError("A refund request is already pending for this registration.")
+
+        Refund.objects.create(
+            registration=registration,
+            amount=payment.amount,
+            reason=reason,
+            status=Refund.Status.PENDING,
+        )
+        registration.status = Registration.Status.REFUND_PENDING
+        registration.save(update_fields=["status"])
+        return registration
+
+    @transaction.atomic
+    def approve_refund(self, *, registration, gateway=None):
+        """
+        Organizer approves a pending refund: processes payment gateway refund,
+        marks registration REFUNDED, and decrements quantity_sold.
+        """
+        from events.models import TicketTier
+        from registrations.models import Payment, Refund, Registration
+
+        if registration.status != Registration.Status.REFUND_PENDING:
+            raise ValueError("This registration has no pending refund to approve.")
+
+        refund = (
+            Refund.objects.filter(
+                registration=registration, status=Refund.Status.PENDING
+            )
+            .order_by("-requested_at")
+            .first()
+        )
+        if refund is None:
+            raise ValueError("No pending refund request found.")
+
+        try:
+            payment = registration.payment
+        except Payment.DoesNotExist:
+            raise ValueError("No payment record found.")
 
         if payment.status == Payment.Status.REFUNDED:
             raise ValueError("This payment has already been refunded.")
@@ -137,13 +172,10 @@ class RegisterForEventService:
         if not result.success:
             raise RuntimeError(f"Gateway refund failed: {result.error}")
 
-        from registrations.models import Refund as RefundModel
-        RefundModel.objects.create(
-            registration=registration,
-            amount=payment.amount,
-            gateway_ref=result.transaction_id,
-            reason=reason,
-        )
+        refund.status = Refund.Status.APPROVED
+        refund.gateway_ref = result.transaction_id
+        refund.refunded_at = timezone.now()
+        refund.save(update_fields=["status", "gateway_ref", "refunded_at"])
 
         payment.status = Payment.Status.REFUNDED
         payment.save(update_fields=["status"])
@@ -155,6 +187,31 @@ class RegisterForEventService:
             quantity_sold=models.F("quantity_sold") - 1
         )
 
+        return registration
+
+    @transaction.atomic
+    def reject_refund(self, *, registration):
+        """Organizer rejects a pending refund request."""
+        from registrations.models import Refund, Registration
+
+        if registration.status != Registration.Status.REFUND_PENDING:
+            raise ValueError("This registration has no pending refund to reject.")
+
+        refund = (
+            Refund.objects.filter(
+                registration=registration, status=Refund.Status.PENDING
+            )
+            .order_by("-requested_at")
+            .first()
+        )
+        if refund is None:
+            raise ValueError("No pending refund request found.")
+
+        refund.status = Refund.Status.REJECTED
+        refund.save(update_fields=["status"])
+
+        registration.status = Registration.Status.CONFIRMED
+        registration.save(update_fields=["status"])
         return registration
 
     def _send_ticket_safe(self, registration) -> None:
