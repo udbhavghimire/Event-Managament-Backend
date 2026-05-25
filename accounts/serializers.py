@@ -5,12 +5,39 @@ from .models import Attendee, Organizer, User
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Read-only representation returned after register / login."""
+    """Read-only representation returned after register / login / me."""
+
+    organisation_name = serializers.SerializerMethodField()
+    contact_phone = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "created_at"]
+        fields = [
+            "id",
+            "email",
+            "full_name",
+            "role",
+            "organisation_name",
+            "contact_phone",
+            "created_at",
+        ]
         read_only_fields = fields
+
+    def get_organisation_name(self, obj: User) -> str | None:
+        if obj.role != User.Role.ORGANIZER:
+            return None
+        try:
+            return obj.organizer.organisation_name
+        except Organizer.DoesNotExist:
+            return None
+
+    def get_contact_phone(self, obj: User) -> str | None:
+        if obj.role != User.Role.ORGANIZER:
+            return None
+        try:
+            return obj.organizer.contact_phone
+        except Organizer.DoesNotExist:
+            return None
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -20,6 +47,7 @@ class RegisterSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=["ORGANIZER", "ATTENDEE"])
     # Required only when role == ORGANIZER
     organisation_name = serializers.CharField(max_length=255, required=False, allow_blank=False)
+    contact_phone = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
     def validate_email(self, value: str) -> str:
         if User.objects.filter(email__iexact=value).exists():
@@ -35,6 +63,7 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data: dict) -> User:
         organisation_name = validated_data.pop("organisation_name", None)
+        contact_phone = validated_data.pop("contact_phone", None) or None
         role = validated_data["role"]
 
         user = User.objects.create_user(
@@ -45,7 +74,11 @@ class RegisterSerializer(serializers.Serializer):
         )
 
         if role == "ORGANIZER":
-            Organizer.objects.create(user=user, organisation_name=organisation_name)
+            Organizer.objects.create(
+                user=user,
+                organisation_name=organisation_name,
+                contact_phone=contact_phone,
+            )
         else:
             Attendee.objects.create(user=user)
 

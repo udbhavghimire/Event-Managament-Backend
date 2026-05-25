@@ -19,6 +19,15 @@ REFRESH_COOKIE = "refresh_token"
 COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
 
 
+def _user_payload(user: User) -> dict:
+    return UserSerializer(user).data
+
+
+def _get_refresh_token(request: Request) -> str | None:
+    """Refresh token from HttpOnly cookie (direct API) or JSON body (BFF proxy)."""
+    return request.COOKIES.get(REFRESH_COOKIE) or request.data.get("refresh")
+
+
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     response.set_cookie(
         key=REFRESH_COOKIE,
@@ -44,14 +53,16 @@ class RegisterView(APIView):
         user = serializer.save()
 
         refresh = RefreshToken.for_user(user)
-        return Response(
+        response = Response(
             {
-                "user_id": user.pk,
+                "user": _user_payload(user),
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
             },
             status=status.HTTP_201_CREATED,
         )
+        _set_refresh_cookie(response, str(refresh))
+        return response
 
 
 @method_decorator(
@@ -69,6 +80,7 @@ class LoginView(APIView):
         refresh = RefreshToken.for_user(user)
         response = Response(
             {
+                "user": _user_payload(user),
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
             },
@@ -78,16 +90,23 @@ class LoginView(APIView):
         return response
 
 
+class MeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        return Response(_user_payload(request.user))
+
+
 class RefreshView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request: Request) -> Response:
         from .models import User as _User
 
-        raw_token = request.COOKIES.get(REFRESH_COOKIE)
+        raw_token = _get_refresh_token(request)
         if not raw_token:
             return Response(
-                {"detail": "Refresh token cookie not found."},
+                {"detail": "Refresh token not found."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -116,7 +135,7 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request: Request) -> Response:
-        raw_token = request.COOKIES.get(REFRESH_COOKIE)
+        raw_token = _get_refresh_token(request)
         if raw_token:
             try:
                 token = RefreshToken(raw_token)
